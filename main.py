@@ -33,37 +33,30 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class Feature_Extractor_Enc(nn.Module):
     def __init__(self, emb_size=40):
         super().__init__()
-        self.firstconv = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=(1, 51), stride=(1, 1), padding=(0, 25), bias=False),
-            nn.BatchNorm2d(16))
-        self.depthwiseConv = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=(20, 1), stride=(1, 1), groups=16, bias=False),
-            nn.BatchNorm2d(32),
+        self.temporal_conv = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=(1, 51), padding=(0, 25), bias=False),
+            nn.BatchNorm2d(16),
             nn.ELU(),
-            nn.AvgPool2d(kernel_size=(1, 4), stride=(1, 4)),
-            nn.Dropout(0.5))
-        self.separableConv = nn.Sequential(
-            nn.Conv2d(32, 32, kernel_size=(1, 15), stride=(1, 1), padding=(0, 7), groups=32, bias=False),
-            nn.Conv2d(32, 32, kernel_size=(1, 1), bias=False),
-            nn.BatchNorm2d(32),
-            nn.ELU(),
-            nn.AvgPool2d(kernel_size=(1, 8), stride=(1, 8)),
-            nn.Dropout(0.5))
+            nn.AvgPool2d((1, 4))
+        )
 
+        self.spatial_conv = nn.Sequential(
+            nn.Conv2d(16, 16, kernel_size=(20, 1), groups=16, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ELU(),
+            nn.AvgPool2d((1, 4))
+        )
         self.projection = nn.Sequential(
             nn.Conv2d(32, emb_size, (1, 1), stride=(1, 1)),
             Rearrange('b e (h) (w) -> b (h w) e'), )
 
     def forward(self, X: Tensor) -> Tensor:
         x, y = X[0], X[1]
-        x = self.firstconv(x)
-        x = self.depthwiseConv(x)
-        x = self.separableConv(x)
+        x = self.temporal_conv(x)
+        x = self.spatial_conv(x)
         x = self.projection(x)
-
-        y = self.firstconv(y)
-        y = self.depthwiseConv(y)
-        y = self.separableConv(y)
+        y = self.temporal_conv(y)
+        y = self.spatial_conv(y)
         y = self.projection(y)
         return (x, y)
 
